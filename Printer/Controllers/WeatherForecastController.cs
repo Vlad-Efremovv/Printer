@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using PdfiumViewer;
 using System.Drawing;
 using System.Drawing.Printing;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace Printer.Controllers
 {
@@ -9,6 +12,13 @@ namespace Printer.Controllers
     [Route("[controller]")]
     public class WeatherForecastController : ControllerBase
     {
+        private readonly ILogger<WeatherForecastController> _logger;
+
+        public WeatherForecastController(ILogger<WeatherForecastController> logger)
+        {
+            _logger = logger;
+        }
+
         [HttpPost]
         [Route("printpdf")]
         public async Task<IActionResult> PrintPdfAsync(IFormFile file)
@@ -21,7 +31,7 @@ namespace Printer.Controllers
                 return BadRequest("Файл должен быть в формате PDF.");
 
             // Указываем путь к корневой директории приложения
-            string rootPath = Path.Combine(Directory.GetCurrentDirectory(), Path.GetFileName(file.FileName));
+            string rootPath = Path.Combine(Directory.GetCurrentDirectory(), file.FileName);
 
             try
             {
@@ -31,76 +41,49 @@ namespace Printer.Controllers
                     await file.CopyToAsync(stream);
                 }
 
-                string printerName = "Samsung SCX-3200 Series"; // Замените на имя вашего принтера
-
-                foreach (string printer in PrinterSettings.InstalledPrinters)
+                // Создаем PrintDocument для печати PDF
+                using (var document = PdfiumViewer.PdfDocument.Load(rootPath))
                 {
-                    Console.WriteLine(printer);
-                    using (var document = PdfDocument.Load(rootPath))
+                    for (int i = 0; i < document.PageCount; i++)
                     {
-                        using (var printDocument = document.CreatePrintDocument())
+                        using (var printDocument = new PrintDocument())
                         {
-                            printDocument.PrinterSettings.PrinterName = printer;
+                            printDocument.PrinterSettings.PrinterName = "Samsung SCX-3200 Series";
+
+                            printDocument.PrintPage += (sender, e) =>
+                            {
+                                e.Graphics.DrawImage(document.Render(i, e.MarginBounds.Width, e.MarginBounds.Height, true), e.MarginBounds);
+                            };
 
                             if (printDocument.PrinterSettings.IsValid)
                             {
                                 printDocument.Print();
-                                _logger.LogCritical("Документ отправлен на печать.");
-                                return Ok("Документ отправлен на печать.");
+                                _logger.LogInformation($"Документ отправлен на печать страницу {i + 1}.");
                             }
                             else
                             {
-                                _logger.LogCritical("Принтер не найден.");
+                                _logger.LogError("Принтер не найден.");
                                 return BadRequest("Принтер не найден.");
                             }
                         }
                     }
                 }
 
-                
+                return Ok("Документ отправлен на печать.");
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при печати документа.");
                 return StatusCode(500, $"Ошибка при печати: {ex.Message}");
             }
             finally
             {
-                //// Убедимся, что файл удаляется после печати
-                //await Task.Delay(10000);
-
-                //if (System.IO.File.Exists(rootPath))
-                //{
-                //    System.IO.File.Delete(rootPath);
-                //}
-
-                using (var document = PdfDocument.Load(rootPath))
+                // Удалим файл после печати
+                if (System.IO.File.Exists(rootPath))
                 {
-                    using (var printDocument = document.CreatePrintDocument())
-                    {
-                        printDocument.PrinterSettings.PrinterName = "Samsung SCX-3200 Series";
-
-                        if (printDocument.PrinterSettings.IsValid)
-                        {
-                            printDocument.Print();
-                            _logger.LogCritical("Документ отправлен на печать.");
-                            //return Ok("Документ отправлен на печать.");
-                        }
-                        else
-                        {
-                            _logger.LogCritical("Принтер не найден.");
-                           // return BadRequest("Принтер не найден.");
-                        }
-                    }
+                    System.IO.File.Delete(rootPath);
                 }
             }
-            return Ok();
-        }
-
-       private readonly ILogger<WeatherForecastController> _logger;
-
-        public WeatherForecastController(ILogger<WeatherForecastController> logger)
-        {
-            _logger = logger;
         }
     }
 }
