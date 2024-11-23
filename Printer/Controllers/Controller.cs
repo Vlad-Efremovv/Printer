@@ -1,5 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
+п»їusing Microsoft.AspNetCore.Mvc;
+using PdfiumViewer;
+using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Printing;
 using System.Net.Sockets;
 using System.Text;
 
@@ -23,164 +26,103 @@ namespace Printer.Controllers
             public string PrinterIp { get; set; }
         }
 
-        // по порту
+        [HttpGet]
+        [Route("getPrinter")]
+        public async Task<IActionResult> PrintPdfAsync() => Ok(PrinterSettings.InstalledPrinters);
+
+
         [HttpPost]
-        [Route("printpdf")]
-        public async Task<IActionResult> PrintPdfAsync([FromForm] PrintRequestDto request)
+        [Route("printPDF")]
+        public async Task<IActionResult> PrintPdfAsyncss(IFormFile file, string printerName = "T80 (РєРѕРїРёСЏ 1)")
         {
-            if (request.File == null || request.File.Length == 0)
-                return BadRequest("Файл не получен.");
+            if (file == null || file.Length == 0)
+                return BadRequest("Р¤Р°Р№Р» РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚");
 
-            // Проверка расширения файла
-            //if (Path.GetExtension(request.File.FileName)?.ToLower() != ".pdf")
-            //    return BadRequest("Файл должен быть в формате PDF.");
+            if (Path.GetExtension(file.FileName)?.ToLower() != ".pdf")
+                return BadRequest("Р¤Р°Р№Р» РЅРµ С„РѕСЂРјР°С‚Р° PDF");
 
-            string tempPath = Path.Combine(Path.GetTempPath(), request.File.FileName);
-
-            using (var stream = new FileStream(tempPath, FileMode.Create))
-            {
-                await request.File.CopyToAsync(stream);
-            }
+            // РїРѕР»РЅС‹Р№ РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ
+            string rootPath = Path.Combine(Directory.GetCurrentDirectory(), file.FileName);
 
             try
             {
-                using (TcpClient client = new TcpClient(request.PrinterIp, 9100))
-                using (NetworkStream stream = client.GetStream())
+                // РЎРѕС…СЂР°РЅРµРЅРёРµ С„Р°Р№Р»Р° РІРѕ РІСЂРµРјРµРЅРЅРѕРµ С…СЂР°РЅРёР»РёС‰Рµ (РџР°РїРєР° temp)
+                using (var stream = new FileStream(rootPath, FileMode.Create))
                 {
-                    using (Image image = Image.FromFile(tempPath))
-                    {
-                        // Преобразование изображения в черно-белое
-                        using (Bitmap bitmap = new Bitmap(image))
-                        {
-                            Bitmap grayscaleBitmap = new Bitmap(bitmap.Width, bitmap.Height);
-                            for (int y = 0; y < bitmap.Height; y++)
-                            {
-                                for (int x = 0; x < bitmap.Width; x++)
-                                {
-                                    Color pixelColor = bitmap.GetPixel(x, y);
-                                    // Вычисляем яркость (от черного до белого)
-                                    int grayValue = (int)((pixelColor.R * 0.299) + (pixelColor.G * 0.587) + (pixelColor.B * 0.114));
-                                    grayscaleBitmap.SetPixel(x, y, Color.FromArgb(grayValue, grayValue, grayValue));
-                                }
-                            }
+                    await file.CopyToAsync(stream);
+                }
 
-                            // Преобразуем в массив байтов для передачи
-                            byte[] imageBytes = CreateEscPosImage(grayscaleBitmap);
-                            await stream.WriteAsync(imageBytes, 0, imageBytes.Length);
+                // Р·Р°РіСЂСѓР¶Р°РµРё Р»РѕРєР°Р»СЊРЅРѕРµ РёРјСЏ РїСЂРёРЅС‚РµСЂР°
+                using (var document = PdfiumViewer.PdfDocument.Load(rootPath))
+                {
+                    for (int i = 0; i < document.PageCount; i++)
+                    {
+                        using (var printDocument = new PrintDocument())
+                        {
+                            // СѓСЃС‚Р°РЅР°РІР»РёРІР°РµРј Р»РѕРєР°Р»СЊРЅРѕРµ РёРјСЏ РїСЂРёРЅС‚РµСЂР° РІ СЃРµС‚Рё
+                            printDocument.PrinterSettings.PrinterName = printerName;
+
+                            // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЂР°Р·РјРµСЂ Р±СѓРјР°РіРё (С€РёСЂРёРЅР° 8 СЃРј = 80 РјРј)
+                            // 8 СЃРј РїРѕ С€РёСЂРёРЅРµ, 12 СЃРј РїРѕ РІС‹СЃРѕС‚Рµ
+                            printDocument.DefaultPageSettings.PaperSize = new PaperSize("Custom", 80 * 10, 80 * 15);
+
+                            // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РѕСЂРёРµРЅС‚Р°С†РёСЋ СЃС‚СЂР°РЅРёС†С‹ РЅР° РєРЅРёР¶РЅСѓСЋ (РїРѕСЂС‚СЂРµС‚)
+                            printDocument.DefaultPageSettings.Landscape = false; // false - РїРѕСЂС‚СЂРµС‚РЅР°СЏ РѕСЂРёРµРЅС‚Р°С†РёСЏ
+
+
+                            // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РІСЃРµ РїРѕР»СЏ РЅР° РЅРѕР»СЊ
+                            printDocument.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+
+
+                            printDocument.PrintPage += (sender, e) =>
+                            {
+                                // РњР°СЃС€С‚Р°Р±РёСЂСѓРµРј РёР·РѕР±СЂР°Р¶РµРЅРёРµ
+                                //float scaleFactor = 0.66f; // РњР°СЃС€С‚Р°Р± 66%
+                                float scaleFactor = 1.5f; // РњР°СЃС€С‚Р°Р± 66%
+
+                                // Р Р°СЃСЃС‡РёС‚С‹РІР°РµРј РЅРѕРІС‹Рµ СЂР°Р·РјРµСЂС‹ РґР»СЏ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ СЃ СѓС‡РµС‚РѕРј РјР°СЃС€С‚Р°Р±Р°
+                                int scaledWidth = (int)(e.MarginBounds.Width * scaleFactor);
+                                int scaledHeight = (int)(e.MarginBounds.Height * scaleFactor);
+
+                                // Р РµРЅРґРµСЂРёРј СЃС‚СЂР°РЅРёС†Сѓ PDF РІ РіСЂР°С„РёРєСѓ СЃ РїСЂРёРјРµРЅРµРЅРёРµРј РјР°СЃС€С‚Р°Р±Р°
+                                e.Graphics.DrawImage(document.Render(i, scaledWidth, scaledHeight, true), e.MarginBounds);
+                            };
+
+                            if (printDocument.PrinterSettings.IsValid)
+                            {
+                                // РџРµС‡Р°С‚СЊ С„Р°Р№Р»Р° РµСЃР»Рё РїСЂРёРЅС‚РµСЂ РґРѕСЃС‚СѓРїРµРЅ
+                                printDocument.Print();
+                                _logger.LogInformation($"Р Р°СЃСЃРїРµС‡Р°С‚Р°РЅРѕ СЃС‚СЂР°РЅРёС†: {i + 1}.");
+                            }
+                            else
+                            {
+                                _logger.LogError("РћС€РёР±РєР° РїРµС‡Р°С‚Рё, РёР·Р·Р° РїСЂРѕР±Р»РµРјС‹ СЃ РїСЂРёРЅС‚РµСЂРѕРј");
+                                return BadRequest("РћС€РёР±РєР° РїРµС‡Р°С‚Рё, РёР·Р·Р° РїСЂРѕР±Р»РµРјС‹ СЃ РїСЂРёРЅС‚РµСЂРѕРј");
+                            }
                         }
                     }
-
-                    Console.WriteLine("Файл успешно отправлен на принтер.");
                 }
+
+                return Ok("РџРµС‡Р°С‚СЊ РїСЂРѕС€Р»Р° СѓСЃРїРµС€РЅРѕ");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Произошла ошибка: " + ex.Message);
-                return StatusCode(500, "Ошибка при отправке на принтер.");
+                _logger.LogError(ex, $"РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°: {ex.Message}");
+                return StatusCode(500, $"РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°: {ex.Message}");
             }
-
-            return Ok("Изображение успешно отправлено на принтер.");
-
-
-            return Ok();
-
-            //using var tcpClient = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            //try
-            //{
-            //    // Подключение к принтеру
-            //    await tcpClient.ConnectAsync(request.PrinterIp, 9100);
-            //    Console.WriteLine("Успешно подключено к принтеру.");
-
-            //    // Вывод всех доступных принтеров
-            //    Console.WriteLine("Доступные принтеры:");
-            //    foreach (string printer in PrinterSettings.InstalledPrinters)
-            //    {
-            //        Console.WriteLine($"- {printer}");
-            //    }
-
-            //    using (var document = PdfDocument.Load(tempPath))
-            //    {
-            //        for (int i = 0; i < document.PageCount; i++)
-            //        {
-            //            using (var printDocument = new PrintDocument())
-            //            {
-            //                printDocument.PrinterSettings.PrinterName = "Имя_вашего_принтера";
-
-            //                printDocument.PrintPage += (sender, e) =>
-            //                {
-            //                    // Рендерим текущую страницу PDF в графический объект
-            //                    e.Graphics.DrawImage(document.Render(i, e.MarginBounds.Width, e.MarginBounds.Height, true), e.MarginBounds);
-            //                };
-
-            //                // Проверяем, установлен ли принтер
-            //                if (printDocument.PrinterSettings.IsValid)
-            //                {
-            //                    printDocument.Print();
-            //                    Console.WriteLine($"Страница {i + 1} успешно распечатана.");
-            //                }
-            //                else
-            //                {
-            //                    Console.WriteLine("Принтер не доступен.");
-            //                    return StatusCode(500);
-            //                }
-            //            }
-            //        }
-            //    }
-
-            //    Console.WriteLine("Все страницы успешно отправлены на печать.");
-            //}
-            //catch (Exception ex)
-            //{
-            //    // Обработка исключений
-            //    Console.WriteLine($"Произошла ошибка: {ex.Message}");
-            //}
-            //finally
-            //{
-            //    if (System.IO.File.Exists(tempPath))
-            //    {
-            //        System.IO.File.Delete(tempPath);
-            //    }
-            //}
-
-
-            // return StatusCode(200);
-        }
-
-        private byte[] CreateEscPosImage(Bitmap bitmap)
-        {
-            using (MemoryStream ms = new MemoryStream())
+            finally
             {
-                // ESC/POS команды для установки режима растровой печати
-                ms.WriteByte(0x1B); // ESC
-                ms.WriteByte(0x2A); // *
-                ms.WriteByte(0x21); // Выбор растрового изображения
-                ms.WriteByte((byte)(bitmap.Width % 256)); // Ширина изображения (младший байт)
-                ms.WriteByte((byte)(bitmap.Width / 256)); // Ширина изображения (старший байт)
-
-                // Печатаем изображение
-                for (int y = 0; y < bitmap.Height; y++)
+                // СѓРґР°Р»СЏРµРј РІСЂРµРјРµРЅРЅС‹Р№ С„Р°Р№Р»
+                if (System.IO.File.Exists(rootPath))
                 {
-                    for (int x = 0; x < bitmap.Width; x += 8)
-                    {
-                        byte b = 0;
-                        // Обработка 8 пикселей за раз
-                        for (int bit = 0; bit < 8; bit++)
-                        {
-                            if (x + bit < bitmap.Width)
-                            {
-                                Color pixelColor = bitmap.GetPixel(x + bit, y);
-                                // Преобразование цвета в 0 (черный) или 1 (белый)
-                                if (pixelColor.R < 128) // Порог для черного
-                                    b |= (byte)(1 << (7 - bit)); // Устанавливаем бит
-                            }
-                        }
-                        ms.WriteByte(b);
-                    }
+                    System.IO.File.Delete(rootPath);
                 }
-
-                ms.WriteByte(0x0A); // Перевод строки
-                return ms.ToArray();
             }
         }
+
+
+
+
     }
+
 }
