@@ -188,7 +188,7 @@ namespace Printer.Controllers
         }
 
         [HttpPost]
-        [Route("printBMP")]
+        [Route("printPdfSocet")]
         public async Task<IActionResult> PrintBmpAsync(IFormFile file)
         {
             //if (file == null || file.Length == 0)
@@ -309,9 +309,6 @@ namespace Printer.Controllers
                 g.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
             }
 
-            // Создаём чёрно-белое изображение с индексированным форматом
-            Bitmap monochromeBitmap = new Bitmap(rgbBitmap.Width, rgbBitmap.Height, PixelFormat.Format1bppIndexed);
-
             // Получаем доступ к пикселям через LockBits для быстрой обработки
             BitmapData rgbData = rgbBitmap.LockBits(
                 new Rectangle(0, 0, rgbBitmap.Width, rgbBitmap.Height),
@@ -319,21 +316,19 @@ namespace Printer.Controllers
                 PixelFormat.Format24bppRgb
             );
 
-            BitmapData monoData = monochromeBitmap.LockBits(
-                new Rectangle(0, 0, monochromeBitmap.Width, monochromeBitmap.Height),
-                ImageLockMode.WriteOnly,
-                PixelFormat.Format1bppIndexed
-            );
-
             byte[] rgbBytes = new byte[rgbData.Height * rgbData.Stride];
             Marshal.Copy(rgbData.Scan0, rgbBytes, 0, rgbBytes.Length);
 
-            byte[] monoBytes = new byte[monoData.Height * monoData.Stride];
+            int widthBytes = (rgbBitmap.Width + 7) / 8; // Ширина в байтах для 1bpp
+            List<byte[]> validRows = new List<byte[]>();
 
+            // Преобразуем все строки в чёрно-белый формат
             for (int y = 0; y < rgbBitmap.Height; y++)
             {
                 int rgbOffset = y * rgbData.Stride;
-                int monoOffset = y * monoData.Stride;
+
+                // Буфер для строки в чёрно-белом формате
+                byte[] monoRow = new byte[widthBytes];
 
                 for (int x = 0; x < rgbBitmap.Width; x++)
                 {
@@ -342,23 +337,106 @@ namespace Printer.Controllers
                                      rgbBytes[rgbOffset + x * 3 + 1] +
                                      rgbBytes[rgbOffset + x * 3 + 2]) / 3;
 
-                    // Инвертируем цвет (белый становится чёрным и наоборот)
-                    if (grayValue >= 128) // Белый пиксель
+                    // Инвертируем цвет (чёрный становится белым и наоборот)
+                    if (grayValue >= 128) // Изначально белый пиксель
                     {
-                        monoBytes[monoOffset + (x / 8)] |= (byte)(0x80 >> (x % 8)); // Устанавливаем как чёрный
+                        // Устанавливаем как чёрный
+                        monoRow[x / 8] |= (byte)(0x80 >> (x % 8));
                     }
-                    // Чёрные пиксели автоматически остаются белыми (бит не устанавливается)
                 }
+
+                // Добавляем строку, даже если она полностью белая (так как 1bpp формат требует каждой строки)
+                validRows.Add(monoRow);
             }
 
-            // Копируем изменённые данные обратно
+            rgbBitmap.UnlockBits(rgbData);
+
+            // Создаём новое изображение только с непустыми строками
+            Bitmap monochromeBitmap = new Bitmap(rgbBitmap.Width, validRows.Count, PixelFormat.Format1bppIndexed);
+
+            BitmapData monoData = monochromeBitmap.LockBits(
+                new Rectangle(0, 0, monochromeBitmap.Width, monochromeBitmap.Height),
+                ImageLockMode.WriteOnly,
+                PixelFormat.Format1bppIndexed
+            );
+
+            // Копируем строки в новое изображение
+            byte[] monoBytes = new byte[validRows.Count * monoData.Stride];
+            for (int y = 0; y < validRows.Count; y++)
+            {
+                Buffer.BlockCopy(validRows[y], 0, monoBytes, y * monoData.Stride, validRows[y].Length);
+            }
+
             Marshal.Copy(monoBytes, 0, monoData.Scan0, monoBytes.Length);
 
-            rgbBitmap.UnlockBits(rgbData);
             monochromeBitmap.UnlockBits(monoData);
 
             return monochromeBitmap;
         }
+
+
+
+
+        // с пропусками между строк
+        //private Bitmap ConvertToMonochrome(Bitmap bitmap)
+        //{
+        //    // Преобразуем изображение в формат RGB, если оно индексированное
+        //    Bitmap rgbBitmap = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format24bppRgb);
+        //    using (Graphics g = Graphics.FromImage(rgbBitmap))
+        //    {
+        //        g.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+        //    }
+
+        //    // Создаём чёрно-белое изображение с индексированным форматом
+        //    Bitmap monochromeBitmap = new Bitmap(rgbBitmap.Width, rgbBitmap.Height, PixelFormat.Format1bppIndexed);
+
+        //    // Получаем доступ к пикселям через LockBits для быстрой обработки
+        //    BitmapData rgbData = rgbBitmap.LockBits(
+        //        new Rectangle(0, 0, rgbBitmap.Width, rgbBitmap.Height),
+        //        ImageLockMode.ReadOnly,
+        //        PixelFormat.Format24bppRgb
+        //    );
+
+        //    BitmapData monoData = monochromeBitmap.LockBits(
+        //        new Rectangle(0, 0, monochromeBitmap.Width, monochromeBitmap.Height),
+        //        ImageLockMode.WriteOnly,
+        //        PixelFormat.Format1bppIndexed
+        //    );
+
+        //    byte[] rgbBytes = new byte[rgbData.Height * rgbData.Stride];
+        //    Marshal.Copy(rgbData.Scan0, rgbBytes, 0, rgbBytes.Length);
+
+        //    byte[] monoBytes = new byte[monoData.Height * monoData.Stride];
+
+        //    for (int y = 0; y < rgbBitmap.Height; y++)
+        //    {
+        //        int rgbOffset = y * rgbData.Stride;
+        //        int monoOffset = y * monoData.Stride;
+
+        //        for (int x = 0; x < rgbBitmap.Width; x++)
+        //        {
+        //            // Рассчитываем оттенок серого
+        //            int grayValue = (rgbBytes[rgbOffset + x * 3] +
+        //                             rgbBytes[rgbOffset + x * 3 + 1] +
+        //                             rgbBytes[rgbOffset + x * 3 + 2]) / 3;
+
+        //            // Инвертируем цвет (белый становится чёрным и наоборот)
+        //            if (grayValue >= 128) // Белый пиксель
+        //            {
+        //                monoBytes[monoOffset + (x / 8)] |= (byte)(0x80 >> (x % 8)); // Устанавливаем как чёрный
+        //            }
+        //            // Чёрные пиксели автоматически остаются белыми (бит не устанавливается)
+        //        }
+        //    }
+
+        //    // Копируем изменённые данные обратно
+        //    Marshal.Copy(monoBytes, 0, monoData.Scan0, monoBytes.Length);
+
+        //    rgbBitmap.UnlockBits(rgbData);
+        //    monochromeBitmap.UnlockBits(monoData);
+
+        //    return monochromeBitmap;
+        //}
 
 
 
