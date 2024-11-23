@@ -204,6 +204,9 @@ namespace Printer.Controllers
                     // Команда инициализации принтера
                     writer.Write(new byte[] { 0x1B, 0x40 });
 
+                    // Устанавливаем межстрочный интервал в 0
+                    writer.Write(new byte[] { 0x1B, 0x33, 0x00 });
+
                     // Преобразуем изображение в байты для ESC/POS
                     int width = monochromeBitmap.Width;
                     int height = monochromeBitmap.Height;
