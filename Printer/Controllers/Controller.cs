@@ -124,55 +124,6 @@ namespace Printer.Controllers
             }
         }
 
-
-        [HttpPost]
-        [Route("createNewPrinter")]
-        public async Task CreateNewPrinter(IFormFile file)
-        {
-            string ipAddress = "192.168.0.105"; // IP-адрес устройства
-            int port = 9100; // Порт устройства
-
-            // Путь для сохранения файла
-            string rootPath = Path.Combine(Directory.GetCurrentDirectory(), file.FileName);
-
-            try
-            {
-                // Сохранение файла во временное хранилище (Папка temp)
-                using (var stream = new FileStream(rootPath, FileMode.Create))
-                {
-                    await file.CopyToAsync(stream);
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Ошибка при сохранении файла: " + e.Message);
-                return;
-            }
-
-            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            try
-            {
-                await socket.ConnectAsync(ipAddress, port); // Подключение к принтеру по IP и порту
-
-                // Конвертируем изображение в байты
-                byte[] imageBytes = await ImageToBytesAsync(rootPath);
-
-                // Отправляем данные на принтер
-                EndPoint endPoint = new IPEndPoint(IPAddress.Parse(ipAddress), port);
-                await socket.SendAsync(new ArraySegment<byte>(imageBytes), SocketFlags.None);
-
-                Console.WriteLine($"На адрес {ipAddress} отправлено {imageBytes.Length} байт(а)");
-            }
-            catch (SocketException ex)
-            {
-                Console.WriteLine($"Ошибка сокета: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Общая ошибка: {ex.Message}");
-            }
-        }
-
         // Функция для конвертации изображения в байты
         static async Task<byte[]> ImageToBytesAsync(string imagePath)
         {
@@ -188,15 +139,9 @@ namespace Printer.Controllers
         }
 
         [HttpPost]
-        [Route("printPdfSocet")]
+        [Route("printImage")]
         public async Task<IActionResult> PrintBmpAsync(IFormFile file)
         {
-            //if (file == null || file.Length == 0)
-            //    return BadRequest("Файл отсутствует");
-
-            //if (Path.GetExtension(file.FileName)?.ToLower() != ".bmp")
-            //    return BadRequest("Файл не формата BMP");
-
             // Полный путь к временному файлу
             string tempPath = Path.Combine(Path.GetTempPath(), file.FileName);
 
@@ -245,8 +190,11 @@ namespace Printer.Controllers
 
         private byte[] ConvertImageToEscPos(Bitmap bitmap)
         {
+            // Масштабируем изображение в 2 раза
+            Bitmap scaledBitmap = ScaleBitmap(bitmap, bitmap.Width * 2, bitmap.Height * 2);
+
             // Преобразуем изображение в черно-белое
-            Bitmap monochromeBitmap = ConvertToMonochrome(bitmap);
+            Bitmap monochromeBitmap = ConvertToMonochrome(scaledBitmap);
 
             using (var ms = new MemoryStream())
             {
@@ -260,7 +208,7 @@ namespace Printer.Controllers
                     int width = monochromeBitmap.Width;
                     int height = monochromeBitmap.Height;
 
-                    for (int y = 0; y < height; y += 24) // ESC/POS поддерживает печать 24 строк за раз
+                    for (int y = 0; y < height; y += 25) // ESC/POS поддерживает печать 24 строк за раз
                     {
                         writer.Write(new byte[] { 0x1B, 0x2A, 33, (byte)(width % 256), (byte)(width / 256) });
 
@@ -299,6 +247,21 @@ namespace Printer.Controllers
                 return ms.ToArray();
             }
         }
+
+        /// <summary>
+        /// Масштабирует изображение до указанного размера.
+        /// </summary>
+        private Bitmap ScaleBitmap(Bitmap bitmap, int newWidth, int newHeight)
+        {
+            Bitmap scaledBitmap = new Bitmap(newWidth, newHeight);
+            using (Graphics g = Graphics.FromImage(scaledBitmap))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(bitmap, 0, 0, newWidth, newHeight);
+            }
+            return scaledBitmap;
+        }
+
 
         private Bitmap ConvertToMonochrome(Bitmap bitmap)
         {
