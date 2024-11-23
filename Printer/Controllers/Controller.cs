@@ -1,16 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using PdfiumViewer;
-using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Drawing.Printing;
-using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Text;
-using static System.Net.Mime.MediaTypeNames;
-
-
 
 namespace Printer.Controllers
 {
@@ -30,118 +23,126 @@ namespace Printer.Controllers
             public string PrinterIp { get; set; }
         }
 
-        [HttpGet]
-        [Route("getPrinter")]
-        public async Task<IActionResult> PrintPdfAsync() => Ok(PrinterSettings.InstalledPrinters);
+        //[HttpGet]
+        //[Route("getPrinter")]
+        //public async Task<IActionResult> PrintPdfAsync() => Ok(PrinterSettings.InstalledPrinters);
 
 
-        [HttpPost]
-        [Route("printPDF")]
-        public async Task<IActionResult> PrintPdfAsyncss(IFormFile file, string printerName = "T80 (копия 1)")
-        {
-            if (file == null || file.Length == 0)
-                return BadRequest("Файл отсутствует");
+        //[HttpPost]
+        //[Route("printPDF")]
+        //public async Task<IActionResult> PrintPdfAsyncss(IFormFile file, string printerName = "T80 (копия 1)")
+        //{
+        //    if (file == null || file.Length == 0)
+        //        return BadRequest("Файл отсутствует");
 
-            if (Path.GetExtension(file.FileName)?.ToLower() != ".pdf")
-                return BadRequest("Файл не формата PDF");
+        //    if (Path.GetExtension(file.FileName)?.ToLower() != ".pdf")
+        //        return BadRequest("Файл не формата PDF");
 
-            // полный путь к файлу
-            string rootPath = Path.Combine(Directory.GetCurrentDirectory(), file.FileName);
+        //    // полный путь к файлу
+        //    string rootPath = Path.Combine(Directory.GetCurrentDirectory(), file.FileName);
 
-            try
-            {
-                // Сохранение файла во временное хранилище (Папка temp)
-                using (var stream = new FileStream(rootPath, FileMode.Create))
-                {
-                    await file.CopyToAsync(stream);
-                }
+        //    try
+        //    {
+        //        // Сохранение файла во временное хранилище (Папка temp)
+        //        using (var stream = new FileStream(rootPath, FileMode.Create))
+        //        {
+        //            await file.CopyToAsync(stream);
+        //        }
 
-                // загружаеи локальное имя принтера
-                using (var document = PdfiumViewer.PdfDocument.Load(rootPath))
-                {
-                    for (int i = 0; i < document.PageCount; i++)
-                    {
-                        using (var printDocument = new PrintDocument())
-                        {
-                            // устанавливаем локальное имя принтера в сети
-                            printDocument.PrinterSettings.PrinterName = printerName;
+        //        // загружаеи локальное имя принтера
+        //        using (var document = PdfiumViewer.PdfDocument.Load(rootPath))
+        //        {
+        //            for (int i = 0; i < document.PageCount; i++)
+        //            {
+        //                using (var printDocument = new PrintDocument())
+        //                {
+        //                    // устанавливаем локальное имя принтера в сети
+        //                    printDocument.PrinterSettings.PrinterName = printerName;
 
-                            // Устанавливаем размер бумаги (ширина 8 см = 80 мм)
-                            // 8 см по ширине, 12 см по высоте
-                            printDocument.DefaultPageSettings.PaperSize = new PaperSize("Custom", 80 * 10, 80 * 15);
+        //                    // Устанавливаем размер бумаги (ширина 8 см = 80 мм)
+        //                    // 8 см по ширине, 12 см по высоте
+        //                    printDocument.DefaultPageSettings.PaperSize = new PaperSize("Custom", 80 * 10, 80 * 15);
 
-                            // Устанавливаем ориентацию страницы на книжную (портрет)
-                            printDocument.DefaultPageSettings.Landscape = false; // false - портретная ориентация
-
-
-                            // Устанавливаем все поля на ноль
-                            printDocument.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
+        //                    // Устанавливаем ориентацию страницы на книжную (портрет)
+        //                    printDocument.DefaultPageSettings.Landscape = false; // false - портретная ориентация
 
 
-                            printDocument.PrintPage += (sender, e) =>
-                            {
-                                // Масштабируем изображение
-                                //float scaleFactor = 0.66f; // Масштаб 66%
-                                float scaleFactor = 1.5f; // Масштаб 66%
+        //                    // Устанавливаем все поля на ноль
+        //                    printDocument.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
 
-                                // Рассчитываем новые размеры для изображения с учетом масштаба
-                                int scaledWidth = (int)(e.MarginBounds.Width * scaleFactor);
-                                int scaledHeight = (int)(e.MarginBounds.Height * scaleFactor);
 
-                                // Рендерим страницу PDF в графику с применением масштаба
-                                e.Graphics.DrawImage(document.Render(i, scaledWidth, scaledHeight, true), e.MarginBounds);
-                            };
+        //                    printDocument.PrintPage += (sender, e) =>
+        //                    {
+        //                        // Масштабируем изображение
+        //                        //float scaleFactor = 0.66f; // Масштаб 66%
+        //                        float scaleFactor = 1.5f; // Масштаб 66%
 
-                            if (printDocument.PrinterSettings.IsValid)
-                            {
-                                // Печать файла если принтер доступен
-                                printDocument.Print();
-                                _logger.LogInformation($"Расспечатано страниц: {i + 1}.");
-                            }
-                            else
-                            {
-                                _logger.LogError("Ошибка печати, изза проблемы с принтером");
-                                return BadRequest("Ошибка печати, изза проблемы с принтером");
-                            }
-                        }
-                    }
-                }
+        //                        // Рассчитываем новые размеры для изображения с учетом масштаба
+        //                        int scaledWidth = (int)(e.MarginBounds.Width * scaleFactor);
+        //                        int scaledHeight = (int)(e.MarginBounds.Height * scaleFactor);
 
-                return Ok("Печать прошла успешно");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Произошла ошибка: {ex.Message}");
-                return StatusCode(500, $"Произошла ошибка: {ex.Message}");
-            }
-            finally
-            {
-                // удаляем временный файл
-                if (System.IO.File.Exists(rootPath))
-                {
-                    System.IO.File.Delete(rootPath);
-                }
-            }
-        }
+        //                        // Рендерим страницу PDF в графику с применением масштаба
+        //                        e.Graphics.DrawImage(document.Render(i, scaledWidth, scaledHeight, true), e.MarginBounds);
+        //                    };
+
+        //                    if (printDocument.PrinterSettings.IsValid)
+        //                    {
+        //                        // Печать файла если принтер доступен
+        //                        printDocument.Print();
+        //                        _logger.LogInformation($"Расспечатано страниц: {i + 1}.");
+        //                    }
+        //                    else
+        //                    {
+        //                        _logger.LogError("Ошибка печати, изза проблемы с принтером");
+        //                        return BadRequest("Ошибка печати, изза проблемы с принтером");
+        //                    }
+        //                }
+        //            }
+        //        }
+
+        //        return Ok("Печать прошла успешно");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Произошла ошибка: {ex.Message}");
+        //        return StatusCode(500, $"Произошла ошибка: {ex.Message}");
+        //    }
+        //    finally
+        //    {
+        //        // удаляем временный файл
+        //        if (System.IO.File.Exists(rootPath))
+        //        {
+        //            System.IO.File.Delete(rootPath);
+        //        }
+        //    }
+        //}
 
         // Функция для конвертации изображения в байты
-        static async Task<byte[]> ImageToBytesAsync(string imagePath)
-        {
-            using (Bitmap bitmap = new Bitmap(imagePath))
-            {
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    // Сохраняем изображение в формат JPEG (можно заменить на другой формат, если нужно)
-                    await Task.Run(() => bitmap.Save(ms, ImageFormat.Jpeg));
-                    return ms.ToArray();
-                }
-            }
-        }
+        //static async Task<byte[]> ImageToBytesAsync(string imagePath)
+        //{
+        //    using (Bitmap bitmap = new Bitmap(imagePath))
+        //    {
+        //        using (MemoryStream ms = new MemoryStream())
+        //        {
+        //            // Сохраняем изображение в формат JPEG (можно заменить на другой формат, если нужно)
+        //            await Task.Run(() => bitmap.Save(ms, ImageFormat.Jpeg));
+        //            return ms.ToArray();
+        //        }
+        //    }
+        //}
 
         [HttpPost]
         [Route("printImage")]
         public async Task<IActionResult> PrintBmpAsync(IFormFile file)
         {
+            if (file == null || file.Length == 0)
+                return BadRequest("Файл отсутствует");
+
+            //if (Path.GetExtension(file.FileName)?.ToLower() != ".png"
+            //    || Path.GetExtension(file.FileName)?.ToLower() != ".bmp"
+            //    || Path.GetExtension(file.FileName)?.ToLower() != ".jpg")
+            //    return BadRequest("Поддерживается форматы png bmp jpg");
+
             // Полный путь к временному файлу
             string tempPath = Path.Combine(Path.GetTempPath(), file.FileName);
 
@@ -185,13 +186,21 @@ namespace Printer.Controllers
                 Console.WriteLine($"Ошибка печати: {ex.Message} {ex}");
                 return StatusCode(500, $"Ошибка печати: {ex.Message}");
             }
+            finally
+            {
+                // удаляем временный файл
+                if (System.IO.File.Exists(tempPath))
+                {
+                    System.IO.File.Delete(tempPath);
+                }
+            }
         }
 
 
-        private byte[] ConvertImageToEscPos(Bitmap bitmap)
+        private byte[] ConvertImageToEscPos(Bitmap bitmap, int zoom = 1)
         {
             // Масштабируем изображение в 2 раза
-            Bitmap scaledBitmap = ScaleBitmap(bitmap, bitmap.Width * 2, bitmap.Height * 2);
+            Bitmap scaledBitmap = ScaleBitmap(bitmap, bitmap.Width * zoom, bitmap.Height * zoom);
 
             // Преобразуем изображение в черно-белое
             Bitmap monochromeBitmap = ConvertToMonochrome(scaledBitmap);
@@ -251,9 +260,8 @@ namespace Printer.Controllers
             }
         }
 
-        /// <summary>
-        /// Масштабирует изображение до указанного размера.
-        /// </summary>
+
+        // Масштабирует изображение до указанного размера.
         private Bitmap ScaleBitmap(Bitmap bitmap, int newWidth, int newHeight)
         {
             Bitmap scaledBitmap = new Bitmap(newWidth, newHeight);
@@ -339,72 +347,5 @@ namespace Printer.Controllers
 
             return monochromeBitmap;
         }
-
-
-
-
-        // с пропусками между строк
-        //private Bitmap ConvertToMonochrome(Bitmap bitmap)
-        //{
-        //    // Преобразуем изображение в формат RGB, если оно индексированное
-        //    Bitmap rgbBitmap = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format24bppRgb);
-        //    using (Graphics g = Graphics.FromImage(rgbBitmap))
-        //    {
-        //        g.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
-        //    }
-
-        //    // Создаём чёрно-белое изображение с индексированным форматом
-        //    Bitmap monochromeBitmap = new Bitmap(rgbBitmap.Width, rgbBitmap.Height, PixelFormat.Format1bppIndexed);
-
-        //    // Получаем доступ к пикселям через LockBits для быстрой обработки
-        //    BitmapData rgbData = rgbBitmap.LockBits(
-        //        new Rectangle(0, 0, rgbBitmap.Width, rgbBitmap.Height),
-        //        ImageLockMode.ReadOnly,
-        //        PixelFormat.Format24bppRgb
-        //    );
-
-        //    BitmapData monoData = monochromeBitmap.LockBits(
-        //        new Rectangle(0, 0, monochromeBitmap.Width, monochromeBitmap.Height),
-        //        ImageLockMode.WriteOnly,
-        //        PixelFormat.Format1bppIndexed
-        //    );
-
-        //    byte[] rgbBytes = new byte[rgbData.Height * rgbData.Stride];
-        //    Marshal.Copy(rgbData.Scan0, rgbBytes, 0, rgbBytes.Length);
-
-        //    byte[] monoBytes = new byte[monoData.Height * monoData.Stride];
-
-        //    for (int y = 0; y < rgbBitmap.Height; y++)
-        //    {
-        //        int rgbOffset = y * rgbData.Stride;
-        //        int monoOffset = y * monoData.Stride;
-
-        //        for (int x = 0; x < rgbBitmap.Width; x++)
-        //        {
-        //            // Рассчитываем оттенок серого
-        //            int grayValue = (rgbBytes[rgbOffset + x * 3] +
-        //                             rgbBytes[rgbOffset + x * 3 + 1] +
-        //                             rgbBytes[rgbOffset + x * 3 + 2]) / 3;
-
-        //            // Инвертируем цвет (белый становится чёрным и наоборот)
-        //            if (grayValue >= 128) // Белый пиксель
-        //            {
-        //                monoBytes[monoOffset + (x / 8)] |= (byte)(0x80 >> (x % 8)); // Устанавливаем как чёрный
-        //            }
-        //            // Чёрные пиксели автоматически остаются белыми (бит не устанавливается)
-        //        }
-        //    }
-
-        //    // Копируем изменённые данные обратно
-        //    Marshal.Copy(monoBytes, 0, monoData.Scan0, monoBytes.Length);
-
-        //    rgbBitmap.UnlockBits(rgbData);
-        //    monochromeBitmap.UnlockBits(monoData);
-
-        //    return monochromeBitmap;
-        //}
-
-
-
     }
 }
