@@ -4,6 +4,7 @@
 
 [Route("printImage")]
 Post -> Печать фотографий формата png, jpg, ??? 
+
 Принимает парамертры:
   - tpsIP       string
   - port        int ( дефолт 9100 )
