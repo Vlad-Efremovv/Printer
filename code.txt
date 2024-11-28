@@ -1,0 +1,60 @@
+ng System;
+using System.Drawing;
+using System.Drawing.Printing;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+
+class Program
+{
+    static void Main()
+    {
+        TcpListener server = new TcpListener(IPAddress.Any, 5000);
+        server.Start();
+        Console.WriteLine("Сервер запущен, ожидает подключения...");
+
+        using (TcpClient client = server.AcceptTcpClient())
+        using (NetworkStream stream = client.GetStream())
+        {
+            using (var ms = new MemoryStream())
+            {
+                stream.CopyTo(ms);
+                ms.Position = 0;
+                Bitmap bitmap = new Bitmap(ms);
+
+                PrintBitmap(bitmap);
+            }
+        }
+
+        Console.WriteLine("Изображение получено и напечатано.");
+        server.Stop();
+    }
+
+    static void PrintBitmap(Bitmap bitmap)
+    {
+        using (PrintDocument printDoc = new PrintDocument())
+        {
+            printDoc.PrintPage += (sender, e) =>
+            {
+                // Установка межстрочного интервала на 0
+                e.Graphics.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
+                // Обрываем бумагу в конце печати
+                e.Graphics.DrawString(Environment.NewLine, new Font("Arial", 10), Brushes.Black, 0, bitmap.Height);
+                e.HasMorePages = false; // Указываем, что больше страниц нет
+            };
+
+            printDoc.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0); // УбираемMargins
+            printDoc.Print();
+        }
+
+        // Обрезка бумаги (проверьте команды для вашей модели принтера)
+        // Пример отправки ESC + d для резки бумаги на принтеры Epson
+        // Используйте эту команду, только если ваш принтер поддерживает данную функциональность.
+        byte[] cutPaperCommand = new byte[] { 0x1D, 0x69 }; // ESC i (обрезка)
+        using (TcpClient cutClient = new TcpClient("127.0.0.1", 5000))
+        using (NetworkStream cutStream = cutClient.GetStream())
+        {
+            cutStream.Write(cutPaperCommand, 0, cutPaperCommand.Length);
+        }
+    }
+}
