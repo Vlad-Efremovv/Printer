@@ -2,22 +2,30 @@
 
  Запускается на порту **http://localhost:8080/**
 
-## [Route("printImage")]
-Post -> Печать фотографий формата png, jpg, ??? 
+## Проект
+ 
+[Printer.zip](https://github.com/Vlad-Efremovv/Printer/blob/master/Printer.zip)
+
+## [Route("printPDF")]
+Post -> Печать PDF файла 
 
 ## Принимает параметры:
-  - [x] file
-  - [x] tpsIP       string
-  - [ ] port        int ( дефолт 9100 )
-  - [ ] zoomImage   float ( дефолт 1 )
-  - [ ] inversion   bool ( Конвертация цветов \ дефолт true )
+  - file
+  - tpsIP          string
+  - [ 9100 ] port        int 
+  - [ 1 ] zoomImage      float
+  - [ true ] inversion   bool ( Конвертация цветов )
  
 
-## ![image](https://github.com/user-attachments/assets/053f32e8-9137-49e0-b756-fc2955d2be68)
+![image](https://github.com/user-attachments/assets/d11f1f1d-a544-4741-ac14-2646fca9cfc0)
 
-## Вернет:
-  - 200   (Изображение успешно отправлено на принтер.)
-  - 500   (Ошибка печати: Этот хост неизвестен.) // tcpIP
-  - 500   (Ошибка печати: Попытка установить соединение была безуспешной, т.к. от другого компьютера за требуемое время не получен нужный отклик, или было разорвано уже установленное соединение из-за неверного отклика уже подключенного компьютера.) // post
-  - 500   (Ошибка печати: Parameter is not valid.) // zoomImage или не верный формат
-  - 400   Файл для печати отсутствует
+## Настройка моей печати для документа : [АРМ работника станка.pdf](https://github.com/user-attachments/files/17949651/default.pdf)
+
+  - file
+  - tpsIP     - 192.168.0.113        
+  - port      - 9100      
+  - zoomImage - 2.5       
+  - inversion - true
+    
+![photo_2024-11-28_18-01-37](https://github.com/user-attachments/assets/3fc97ed4-eda3-4336-99dc-65a9d78afc12)
+
