@@ -15,7 +15,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // ”казываем базовый адрес
-var baseAddress = "http://localhost:8080";
+var baseAddress = "https://localhost:8080";
 
 app.UseHttpsRedirection();
 app.UseAuthorization();

@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
-namespace Printer.Controllers
+namespace Printer
 {
     [ApiController]
     public class Controller : ControllerBase
@@ -194,7 +194,7 @@ namespace Printer.Controllers
                                         Color pixel = monochromeBitmap.GetPixel(x, pixelY);
                                         if (pixel.R == 0) // Если пиксель черный
                                         {
-                                            data |= (byte)(1 << (7 - b));
+                                            data |= (byte)(1 << 7 - b);
                                         }
                                     }
                                 }
@@ -276,13 +276,13 @@ namespace Printer.Controllers
                     if (grayValue >= 128 && inversion) // Изначально белый пиксель
                     {
                         // Устанавливаем как чёрный
-                        monoRow[x / 8] |= (byte)(0x80 >> (x % 8));
+                        monoRow[x / 8] |= (byte)(0x80 >> x % 8);
                     }
 
                     if (grayValue <= 128 && !inversion) // Изначально черный пиксель
                     {
                         // Устанавливаем как чёрный
-                        monoRow[x / 8] |= (byte)(0x80 >> (x % 8));
+                        monoRow[x / 8] |= (byte)(0x80 >> x % 8);
                     }
                 }
 
