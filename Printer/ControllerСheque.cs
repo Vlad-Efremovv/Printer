@@ -8,11 +8,11 @@ using System.Runtime.InteropServices;
 namespace Printer
 {
     [ApiController]
-    public class Controller : ControllerBase
+    public class ControllerСheque : ControllerBase
     {
-        private readonly ILogger<Controller> _logger;
+        private readonly ILogger<ControllerСheque> _logger;
 
-        public Controller(ILogger<Controller> logger)
+        public ControllerСheque(ILogger<ControllerСheque> logger)
         {
             _logger = logger;
         }
