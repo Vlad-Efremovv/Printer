@@ -18,7 +18,6 @@
   - tpsIP			string
   - secretQR		string
   - descriptionQR	string? (перечисление через запятую)
-  - tpsIP			tring
   - [ 14 ] textSize	int 
   - [ 14 ] sizeQR	int 
   - [ 9100 ] port	float
