@@ -14,6 +14,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseSwagger();
+app.UseSwaggerUI();
+
 // ”казываем базовый адрес
 var baseAddress = "https://localhost:8080";
 
