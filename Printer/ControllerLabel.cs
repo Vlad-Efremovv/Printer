@@ -4,15 +4,16 @@ using PdfiumViewer;
 using System.Net.Sockets;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Printer
 {
     [ApiController]
     public class ControllerLabel : ControllerBase
     {
-        private readonly ILogger<ControllerСheque> _logger;
+        private readonly ILogger<ControllerLabel> _logger;
 
-        public ControllerLabel(ILogger<ControllerСheque> logger)
+        public ControllerLabel(ILogger<ControllerLabel> logger)
         {
             _logger = logger;
         }
@@ -24,166 +25,54 @@ namespace Printer
         }
 
         [HttpPost]
-        [Route("printPDF")]
-        public async Task<IActionResult> PrintPDFAsync(IFormFile file, string printerIp, int port = 9100)
+        [Route("print")]
+        public async Task<IActionResult> PrintPDFAsync(IFormFile file, string printerIP, int port = 09100)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("Файл отсутствует");
-
-            string tempPath = Path.Combine(Path.GetTempPath(), file.FileName);
+            string ipAddress = printerIP;
+            string zplImageData = string.Empty;
+            string filePath = @"C:\Users\Vlad\Pictures\Screenshots\Снимок экрана 2025-04-23 102352.png";
 
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.Create))
+                byte[] binaryData = System.IO.File.ReadAllBytes(filePath);
+                foreach (Byte b in binaryData)
                 {
-                    await file.CopyToAsync(stream);
+                    string hexRep = String.Format("{0:X}", b);
+                    if (hexRep.Length == 1)
+                        hexRep = "0" + hexRep;
+                    zplImageData += hexRep;
                 }
 
-                List<string> outputImagePaths = renderPdfToFile(tempPath, 300);
+                string zplToSend = "^XA^FO0,0^GFA," + binaryData.Length + "," + binaryData.Length + ",100," + zplImageData + "^XZ";
 
-                foreach (var outputImagePath in outputImagePaths)
+                zplToSend = "^XA\n^FO250,250\n^BQa,2,10\n^FDHA,Степа я хочу повышение зарплаты^FS\n^XZ\n";
+
+                
+                string printImage = "^XA^FO115,50^IME:LOGO.PNG^FS^XZ";
+
+                // Open connection
+                using (System.Net.Sockets.TcpClient client = new System.Net.Sockets.TcpClient())
                 {
-                    using (Bitmap image = new Bitmap(outputImagePath))
+                    _logger.LogInformation("Attempting to connect to printer at {PrinterIP}:{Port}", ipAddress, port);
+                    client.Connect(ipAddress, port);
+                    _logger.LogInformation("Successfully connected to printer.");
+
+                    // Write ZPL String to connection
+                    using (System.IO.StreamWriter writer = new System.IO.StreamWriter(client.GetStream(), Encoding.UTF8))
                     {
-                        byte[] printData = ConvertImageForGodex(image);
-                        await SendDataToPrinter(printerIp, port, printData);
-
-                        Console.WriteLine("Изображение отправлено на принтер.");
+                        writer.Write(zplToSend + zplImageData);
+                        writer.Flush();
                     }
+
                 }
 
-                return Ok("PDF успешно обработан и отправлен на печать");
+                return StatusCode(200, "");
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Error occurred while processing file: {Message}", ex.Message);
                 return StatusCode(500, $"Ошибка при обработке файла: {ex.Message}");
             }
-            finally
-            {
-                if (System.IO.File.Exists(tempPath))
-                    System.IO.File.Delete(tempPath);
-            }
-        }
-
-        private List<string> renderPdfToFile(string pdfFilename, int dpi)
-        {
-            var outputPaths = new List<string>();
-            try
-            {
-                using (var doc = PdfDocument.Load(pdfFilename))
-                {
-                    Console.WriteLine("Загрузка PDF-документа из файла...");
-                    for (int page = 0; page < doc.PageCount; page++)
-                    {
-                        using (var img = doc.Render(page, dpi, dpi, false))
-                        {
-                            // Формируем путь для сохранения каждого изображения
-                            string outputFilePath = Path.Combine(Path.GetTempPath(), $"page_{page}.png");
-                            img.Save(outputFilePath, ImageFormat.Png);
-                            Console.WriteLine($"Файл сохранен: {outputFilePath}");
-                            outputPaths.Add(outputFilePath);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка при рендеринге PDF: {ex.Message}");
-            }
-            return outputPaths;
-        }
-
-        //private byte[] ConvertImageForGodex(Bitmap bitmap)
-        //{
-        //    // Разрешение для печати
-        //    const int dpi = 203; // dpi для Godex ZX430i (проверьте в спецификациях принтера)
-
-        //    // Преобразовать изображение в формат, поддерживаемый принтером
-        //    using (var ms = new MemoryStream())
-        //    {
-        //        // Преобразование в 1bpp (черно-белый) изображение
-        //        using (var monochromeBitmap = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format1bppIndexed))
-        //        {
-        //            using (Graphics g = Graphics.FromImage(monochromeBitmap))
-        //            {
-        //                // Рисуем черно-белое изображение
-        //                g.Clear(Color.White); // заполняем белым фоном
-        //                g.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
-        //            }
-
-        //            // Сохранение в поток
-        //            monochromeBitmap.Save(ms, ImageFormat.Bmp);
-        //        }
-
-        //        // Здесь заготовка для команд принтера
-        //        // Добавление ваших команд для Godex начинающих и завершающих печать
-        //        // Например, нужно будет удостовериться, что направляете свое изображение в формате (BMP или другой поддерживаемый формат)
-
-        //        // В конце возврат данных изображения
-        //        return ms.ToArray();
-        //    }
-        //}
-
-        private byte[] ConvertImageForGodex(Bitmap bitmap)
-        {
-            using (var ms = new MemoryStream())
-            {
-                // Сохранение битмапа в формате, поддерживаемом принтером
-                bitmap.Save(ms, ImageFormat.Bmp); // Проверьте поддерживаемый формат
-
-                using (var writer = new BinaryWriter(new MemoryStream()))
-                {
-                    // Инициализация принтера
-                    writer.Write(new byte[] { 0x1B, 0x40 }); // Сброс принтера
-
-                    // Обработка изображения в формате принтера
-                    // Здесь ваш код для означает получение изображения в нужном формате
-                    byte[] imageData = ms.ToArray();
-
-                    // Пример отправки данных изображения для печати
-                    writer.Write(new byte[] { 0x1D, 0x76, 0x30, 0x00, (byte)(bitmap.Width % 256), (byte)(bitmap.Width / 256) }); // Настройка ширины
-
-                    // Записываем данные изображения
-                    writer.Write(imageData);
-
-                    // Завершение печати
-                    writer.Write(new byte[] { 0x1D, 0x56, 0x41, 0x00 }); // Например, резка бумаги
-
-                    return ((MemoryStream)writer.BaseStream).ToArray();
-                }
-            }
-        }
-
-
-
-        private async Task SendDataToPrinter(string printerIp, int port, byte[] data)
-        {
-            using (var client = new TcpClient())
-            {
-                await client.ConnectAsync(printerIp, port);
-                using (var stream = client.GetStream())
-                {
-                    await stream.WriteAsync(data, 0, data.Length);
-                }
-            }
-        }
-
-        // Масштабирует изображение до указанного размера.
-        private Bitmap ScaleBitmap(Bitmap bitmap, float scaleFactor)
-        {
-            // Рассчитываем новые размеры на основе коэффициента масштабирования
-            int newWidth = (int)(bitmap.Width * scaleFactor);
-            int newHeight = (int)(bitmap.Height * scaleFactor);
-
-            Bitmap scaledBitmap = new Bitmap(newWidth, newHeight);
-            using (Graphics g = Graphics.FromImage(scaledBitmap))
-            {
-                // Используем высококачественный алгоритм интерполяции
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                g.DrawImage(bitmap, 0, 0, newWidth, newHeight);
-            }
-
-            return scaledBitmap;
         }
     }
 }

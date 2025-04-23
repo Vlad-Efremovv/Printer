@@ -22,7 +22,7 @@ namespace Printer
             public IFormFile File { get; set; }
             public string PrinterIp { get; set; }
         }
-
+        
         [HttpPost]
         [Route("printPDF")]
         public async Task<IActionResult> PrintPDFAsync(IFormFile file, string tpsIP, int port = 9100, float zoomImage = 1, bool inversion = true)
